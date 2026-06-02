@@ -1,12 +1,23 @@
+import os
 import streamlit as st
 import pandas as pd
 from core.database import supabase
-from main import run_deal_bot # Import our new master pipeline
+from main import run_deal_bot 
+
+# --- BOOTUP SCRIPT: Force Streamlit Cloud to download the browser ---
+@st.cache_resource
+def install_playwright():
+    os.system("python -m playwright install chromium")
+
+install_playwright()
+# --------------------------------------------------------------------
 
 # Configure the page layout
 st.set_page_config(page_title="Forge Deal Radar", page_icon="🏗️", layout="wide")
 
 st.title("🏗️ Forge Deal Bot: Command Center")
+
+# ... (Keep the rest of your tab1 and tab2 code exactly the same below here)
 
 # Create navigation tabs
 tab1, tab2 = st.tabs(["📡 Live Radar", "⚙️ Manual Override"])
