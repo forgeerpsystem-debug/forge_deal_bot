@@ -77,17 +77,27 @@ with tab1:
 # --- TAB 2: MANUAL OVERRIDE ---
 with tab2:
     st.header("Manual Data Hunt")
-    st.markdown("Force the bot to search the internet for specific equipment right now.")
+    st.markdown("Force the bot to search specific sites and keywords right now.")
     
-    # Input field for keywords
+    # 1. NEW: The Website Selector
+    available_sites = ["Purple Wave", "Ritchie Bros", "MachineryTrader"]
+    target_sites = st.multiselect(
+        "Select Target Auction Sites", 
+        available_sites, 
+        default=["Purple Wave"]
+    )
+    
+    # 2. The Keyword Selector
     target_keywords = st.text_input("Target Keywords (comma separated)", value="skid steer, backhoe, dozer")
     
     if st.button("🚀 Launch Manual Hunt"):
-        # Clean up the inputted keywords into a list
-        keywords_list = [kw.strip() for kw in target_keywords.split(",") if kw.strip()]
-        
-        # st.spinner shows a loading wheel on the UI while Python does the heavy lifting
-        with st.spinner(f"Hunting for {', '.join(keywords_list)}... (This will take a minute)"):
-            run_deal_bot(keywords_list)
+        if not target_sites:
+            st.error("⚠️ Please select at least one auction site!")
+        else:
+            keywords_list = [kw.strip() for kw in target_keywords.split(",") if kw.strip()]
             
-        st.success("✅ Manual hunt complete! Switch to the Live Radar tab to see the new data.")
+            # Pass BOTH the keywords and the selected sites to the main script
+            with st.spinner(f"Hunting {', '.join(target_sites)} for {', '.join(keywords_list)}..."):
+                run_deal_bot(keywords_list, target_sites)
+                
+            st.success("✅ Manual hunt complete! Switch to the Live Radar tab to see the new data.")
