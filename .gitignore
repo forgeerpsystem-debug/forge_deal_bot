@@ -1,0 +1,17 @@
+# Security / Secrets
+.env
+.streamlit/secrets.toml
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Python Cache (Junk files)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Mac OS System Files
+.DS_Store
