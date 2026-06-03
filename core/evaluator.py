@@ -11,21 +11,14 @@ load_dotenv()
 supabase: Client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")
 
-# Connect to the local OpenClaw engine for LLM analysis
 llm_client = OpenAI(
     base_url="http://127.0.0.1:18789/v1",
-    api_key="my-custom-key-18789"
+    api_key=***
 )
 
 def research_historical_value(make, model):
-    """
-    Uses SerpApi to get Google search results for the equipment.
-    Feeds the snippets to OpenClaw (local LLM) to accurately determine 
-    the fair market retail value, ignoring shipping costs and junk data.
-    """
     print(f"🔎 Researching Market Value for: {make} {model}...")
-    
-    SERPAPI_KEY = os.getenv("SERPAPI_KEY")
+    SERPAPI_KEY = ***"SERPAPI_KEY")
     if not SERPAPI_KEY:
         print("❌ MISSING SERPAPI KEY!")
         return None
@@ -54,7 +47,6 @@ def research_historical_value(make, model):
         if not raw_text.strip():
             return None
 
-        # Let the LLM do the heavy lifting
         prompt = f"""
         You are an expert heavy machinery appraiser. 
         I am going to give you raw search snippets for a used: {make} {model}.
@@ -76,7 +68,7 @@ def research_historical_value(make, model):
         val_str = response.choices[0].message.content.strip()
         estimated_value = int(''.join(filter(str.isdigit, val_str)))
         
-        if estimated_value > 1000: # Sanity check
+        if estimated_value > 1000:
             return estimated_value
         return None
                 
@@ -85,9 +77,7 @@ def research_historical_value(make, model):
         return None
 
 def auto_generate_baselines():
-    """Finds machines without a retail value, researches them via LLM, and updates the database."""
     print("🧠 Booting Evaluator Brain: AI analyzing market baselines...")
-    
     listings = supabase.table("equipment_listings").select("make, model").execute().data
     baselines = supabase.table("market_baselines").select("make, model").execute().data
     
@@ -114,9 +104,9 @@ def auto_generate_baselines():
 
     return new_baselines_added
 
-def evaluate_deals_and_alert(target_margin=15000):
-    """Checks for massive margins and fires Discord Webhooks."""
-    print("🚨 Scanning radar for high-margin deals...")
+def evaluate_deals_and_alert(target_ratio=0.70):
+    """Checks for deals where the current bid is <= target_ratio of the retail value."""
+    print(f"🚨 Scanning radar for deals at or below {int(target_ratio*100)}% of retail value...")
     
     listings = supabase.table("equipment_listings").select("*").eq("status", "Active").execute().data
     baselines = supabase.table("market_baselines").select("*").execute().data
@@ -129,19 +119,20 @@ def evaluate_deals_and_alert(target_margin=15000):
         model_key = f"{item['make']} {item['model']}"
         retail_value = baseline_dict.get(model_key)
         
-        if retail_value:
-            margin = retail_value - item['current_bid']
+        # Only evaluate if we have a baseline and the current bid is more than $0
+        # (A $0 bid technically triggers the 70% rule, but is usually an un-opened auction)
+        if retail_value and retail_value > 0 and item['current_bid'] > 0:
+            target_max_bid = retail_value * target_ratio
             
-            if margin >= target_margin:
+            if item['current_bid'] <= target_max_bid:
+                margin = retail_value - item['current_bid']
+                discount_percent = 100 - ((item['current_bid'] / retail_value) * 100)
+                
                 existing_alert = supabase.table("alert_logs").select("id").eq("listing_id", item['id']).execute().data
                 if not existing_alert:
-                    
-                    # Optional: We could also filter out auctions closing far in the future here
-                    # if 'closing_date' in item and item['closing_date']: ...
-                    
                     message = {
                         "embeds": [{
-                            "title": f"🚨 HIGH MARGIN DEAL: {item['year'] or ''} {item['make']} {item['model']}",
+                            "title": f"🚨 {int(discount_percent)}% OFF RETAIL: {item['year'] or ''} {item['make']} {item['model']}",
                             "url": item['listing_url'],
                             "color": 5763719,
                             "fields": [
@@ -156,13 +147,13 @@ def evaluate_deals_and_alert(target_margin=15000):
                     }
                     
                     requests.post(DISCORD_WEBHOOK, json=message)
-                    print(f"🎯 Alert Fired: {item['make']} {item['model']} (${margin:,} margin)")
+                    print(f"🎯 Alert Fired: {item['make']} {item['model']} ({int(discount_percent)}% below retail)")
                     
-                    supabase.table("alert_logs").insert({"listing_id": item['id'], "alert_type": "High Margin"}).execute()
+                    supabase.table("alert_logs").insert({"listing_id": item['id'], "alert_type": "Percentage Discount"}).execute()
                     alerts_sent += 1
 
     print(f"🏁 Evaluation complete. {alerts_sent} new alerts fired to Discord.")
 
 if __name__ == "__main__":
     auto_generate_baselines()
-    evaluate_deals_and_alert(target_margin=15000)
+    evaluate_deals_and_alert(target_ratio=0.70)

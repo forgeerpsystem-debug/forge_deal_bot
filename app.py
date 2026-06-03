@@ -38,14 +38,20 @@ with tab1:
             
         df['potential_margin'] = df['fair_market_value'] - df['current_bid']
         
+        # Calculate discount percentage for sorting/filtering
+        df['discount_percent'] = 0.0
+        mask = (df['fair_market_value'].notnull()) & (df['fair_market_value'] > 0)
+        df.loc[mask, 'discount_percent'] = 100 - ((df.loc[mask, 'current_bid'] / df.loc[mask, 'fair_market_value']) * 100)
+        
         if 'closing_date' not in df.columns:
             df['closing_date'] = "Unknown"
             
-        display_cols = ['auction_site', 'make', 'model', 'year', 'closing_date', 'current_bid', 'fair_market_value', 'potential_margin', 'status', 'listing_url']
+        display_cols = ['auction_site', 'make', 'model', 'year', 'closing_date', 'current_bid', 'fair_market_value', 'discount_percent', 'potential_margin', 'status', 'listing_url']
         existing_cols = [col for col in display_cols if col in df.columns]
         df = df[existing_cols]
         
-        df = df.sort_values(by='potential_margin', ascending=False)
+        # Sort by best discount percentage
+        df = df.sort_values(by='discount_percent', ascending=False)
         
         st.dataframe(
             df,
@@ -57,6 +63,7 @@ with tab1:
                 "closing_date": "Closing Date",
                 "current_bid": st.column_config.NumberColumn("Current Bid", format="$%d"),
                 "fair_market_value": st.column_config.NumberColumn("Est. Retail (AI)", format="$%d"),
+                "discount_percent": st.column_config.NumberColumn("Discount %", format="%d%%"),
                 "potential_margin": st.column_config.NumberColumn("Est. Margin", format="$%d"),
                 "status": "Status",
                 "listing_url": st.column_config.LinkColumn("Auction Link")
@@ -73,9 +80,9 @@ with tab2:
     st.markdown("Force the bot to search specific sites and keywords right now.")
     
     available_sites = ["Purple Wave", "Ritchie Bros", "MachineryTrader", "Ironbound Auctions"]
-    target_sites = st.multiselect("Select Target Auction Sites", available_sites, default=["Purple Wave", "Ironbound Auctions"])
+    target_sites = st.multiselect("Select Target Auction Sites", available_sites, default=available_sites)
     
-    target_keywords = st.text_input("Target Keywords (comma separated)", value="skid steer, backhoe, dozer")
+    target_keywords = st.text_input("Target Keywords (comma separated)", value="skid steer, trencher, ditchwitch, genie, scissor lift, mini excavator")
     
     if st.button("🚀 Launch Manual Hunt"):
         if not target_sites:
