@@ -6,8 +6,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from scrapers.bs4_purplewave import scrape_purplewave
 from scrapers.playwright_ritchie import scrape_ritchie_bros
-# IMPORT FUTURE SCRAPERS HERE:
-# from scrapers.machinery_trader import scrape_machinery_trader
+from scrapers.machinery_trader import scrape_machinery_trader
+from scrapers.ironbound_auctions import scrape_ironbound
 
 from core.evaluator import auto_generate_baselines, evaluate_deals_and_alert
 
@@ -22,13 +22,12 @@ def run_deal_bot(keywords=["skid steer", "excavator"], target_sites=["Purple Wav
         for kw in keywords:
             if site == "Purple Wave":
                 scrape_purplewave(kw)
-                
             elif site == "Ritchie Bros":
                 scrape_ritchie_bros(kw)
-                
             elif site == "MachineryTrader":
-                print(f"⚠️ [Placeholder] MachineryTrader scraper not yet built. Skipping {kw}.")
-                # scrape_machinery_trader(kw)
+                scrape_machinery_trader(kw)
+            elif site == "Ironbound Auctions":
+                scrape_ironbound(kw)
 
     # 2. Research Missing Baselines via local AI & SerpApi
     auto_generate_baselines()
@@ -40,4 +39,4 @@ def run_deal_bot(keywords=["skid steer", "excavator"], target_sites=["Purple Wav
 
 if __name__ == "__main__":
     # If run on autopilot (Cron Job), it will default to these settings
-    run_deal_bot(keywords=["skid steer", "excavator"], target_sites=["Purple Wave"])
+    run_deal_bot(keywords=["skid steer", "excavator"], target_sites=["Purple Wave", "Ritchie Bros", "MachineryTrader", "Ironbound Auctions"])

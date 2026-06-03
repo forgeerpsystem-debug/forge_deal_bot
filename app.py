@@ -38,7 +38,6 @@ with tab1:
             
         df['potential_margin'] = df['fair_market_value'] - df['current_bid']
         
-        # Ensure closing_date is present in the dataframe even if the DB doesn't have it yet
         if 'closing_date' not in df.columns:
             df['closing_date'] = "Unknown"
             
@@ -73,8 +72,8 @@ with tab2:
     st.header("Manual Data Hunt")
     st.markdown("Force the bot to search specific sites and keywords right now.")
     
-    available_sites = ["Purple Wave", "Ritchie Bros", "MachineryTrader"]
-    target_sites = st.multiselect("Select Target Auction Sites", available_sites, default=["Purple Wave"])
+    available_sites = ["Purple Wave", "Ritchie Bros", "MachineryTrader", "Ironbound Auctions"]
+    target_sites = st.multiselect("Select Target Auction Sites", available_sites, default=["Purple Wave", "Ironbound Auctions"])
     
     target_keywords = st.text_input("Target Keywords (comma separated)", value="skid steer, backhoe, dozer")
     
