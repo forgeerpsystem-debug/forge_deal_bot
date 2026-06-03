@@ -5,8 +5,8 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from scrapers.bs4_purplewave import scrape_purplewave
+from scrapers.playwright_ritchie import scrape_ritchie_bros
 # IMPORT FUTURE SCRAPERS HERE:
-# from scrapers.ritchie_bros import scrape_ritchie_bros
 # from scrapers.machinery_trader import scrape_machinery_trader
 
 from core.evaluator import auto_generate_baselines, evaluate_deals_and_alert
@@ -24,14 +24,13 @@ def run_deal_bot(keywords=["skid steer", "excavator"], target_sites=["Purple Wav
                 scrape_purplewave(kw)
                 
             elif site == "Ritchie Bros":
-                print(f"⚠️ [Placeholder] Ritchie Bros scraper not yet built. Skipping {kw}.")
-                # scrape_ritchie_bros(kw)
+                scrape_ritchie_bros(kw)
                 
             elif site == "MachineryTrader":
                 print(f"⚠️ [Placeholder] MachineryTrader scraper not yet built. Skipping {kw}.")
                 # scrape_machinery_trader(kw)
 
-    # 2. Research Missing Baselines via SerpApi
+    # 2. Research Missing Baselines via local AI & SerpApi
     auto_generate_baselines()
     
     # 3. Evaluate Margins and Fire Discord Alerts
