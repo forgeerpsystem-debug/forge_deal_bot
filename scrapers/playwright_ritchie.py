@@ -1,4 +1,4 @@
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 import re
 import sys
@@ -6,104 +6,98 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.database import insert_equipment_listing
+from scrapers.utils import parse_title, clean_price
 
-def clean_price(price_str):
-    if not price_str:
-        return 0
-    clean_str = re.sub(r'[^\d]', '', str(price_str))
-    return int(clean_str) if clean_str else 0
+SITE = "Ritchie Bros"
+BASE_URL = "https://www.rbauction.com"
 
-def scrape_ritchie_bros(keyword="skid steer"):
-    print(f"🚜 Initiating Ritchie Bros Hunt for: '{keyword}'...")
-    search_term = keyword.replace(" ", "+")
-    url = f"https://www.rbauction.com/search?keywords={search_term}"
 
-    success_count = 0
+async def scrape_ritchie_bros(keywords: list[str], max_pages: int = 3) -> set[str]:
+    print(f"🚜 {SITE}: Hunting {keywords} across up to {max_pages} pages...")
+    all_deals: list[dict] = []
+    found_urls: set[str] = set()
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.set_extra_http_headers({
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.set_extra_http_headers({
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         })
 
-        print("⏳ Waiting for Ritchie Bros to load...")
-        try:
-            page.goto(url, wait_until="networkidle", timeout=25000)
-            html = page.content()
-        except Exception as e:
-            print(f"⚠️ Page load timed out or failed: {e}")
-            browser.close()
-            return
-            
-        browser.close()
+        for keyword in keywords:
+            search_term = keyword.replace(" ", "+")
 
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    # Broadly match Ritchie Bros equipment links
-    listing_links = soup.find_all("a", href=re.compile(r'/(equipment|heavy-equipment|construction)/'))
-    processed_urls = set()
+            for page_num in range(1, max_pages + 1):
+                url = f"{BASE_URL}/search?keywords={search_term}&page={page_num}"
+                try:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                    await page.wait_for_selector(
+                        "a[href*='/equipment/'], a[href*='/heavy-equipment/'], a[href*='/construction/']",
+                        timeout=8000
+                    )
+                    html = await page.content()
+                except Exception as e:
+                    print(f"⚠️ {SITE} p{page_num} '{keyword}': {e}")
+                    break
 
-    if not listing_links:
-        print("⚠️ No Ritchie Bros listings found. The site layout may require deeper inspection.")
-        return
+                soup = BeautifulSoup(html, 'html.parser')
+                links = soup.find_all("a", href=re.compile(r'/(equipment|heavy-equipment|construction)/'))
+                if not links:
+                    break
 
-    for link in listing_links:
-        try:
-            href = link.get('href')
-            if not href.startswith("http"):
-                href = "https://www.rbauction.com" + href
-                
-            if href in processed_urls:
-                continue
-            processed_urls.add(href)
+                page_new = 0
+                for link in links:
+                    href = link.get('href', '')
+                    if not href.startswith("http"):
+                        href = BASE_URL + href
+                    if href in found_urls:
+                        continue
+                    found_urls.add(href)
+                    page_new += 1
 
-            container = link.find_parent("div")
-            for _ in range(4):
-                if container and container.parent:
-                    container = container.parent
-            if not container:
-                continue
+                    try:
+                        container = link.find_parent("div")
+                        for _ in range(4):
+                            if container and container.parent:
+                                container = container.parent
+                        if not container:
+                            continue
 
-            raw_title = link.get_text(strip=True)
-            if not raw_title or len(raw_title) < 5:
-                title_elem = container.find(["h3", "h4", "a"])
-                raw_title = title_elem.get_text(strip=True) if title_elem else ""
-                
-            if not raw_title:
-                continue
+                        raw_title = link.get_text(strip=True)
+                        if not raw_title or len(raw_title) < 5:
+                            title_elem = container.find(["h3", "h4"])
+                            raw_title = title_elem.get_text(strip=True) if title_elem else ""
+                        if not raw_title:
+                            continue
 
-            parts = raw_title.split(" ", 2)
-            year = int(parts[0]) if parts[0].isdigit() else None
-            make = parts[1] if len(parts) > 1 else "Unknown"
-            model = parts[2] if len(parts) > 2 else "Unknown"
+                        year, make, model = parse_title(raw_title)
 
-            bid_element = container.find(string=re.compile(r'\$'))
-            current_bid = clean_price(bid_element) if bid_element else 0
-            
-            closing_date = "Unknown"
-            date_element = container.find(string=re.compile(r'(?i)(closes|ends|auction date|bidding opens)'))
-            if date_element:
-                closing_date = date_element.strip()
+                        bid_elem = container.find(string=re.compile(r'\$'))
+                        current_bid = clean_price(bid_elem) if bid_elem else 0
 
-            deal_data = {
-                "auction_site": "Ritchie Bros",
-                "listing_url": href,
-                "make": make,
-                "model": model,
-                "year": year,
-                "current_bid": current_bid,
-                "closing_date": closing_date,
-                "status": "Active"
-            }
+                        closing_date = "Unknown"
+                        date_elem = container.find(string=re.compile(r'(?i)(closes|ends|auction date|bidding opens)'))
+                        if date_elem:
+                            closing_date = date_elem.strip()
 
-            if insert_equipment_listing(deal_data):
-                success_count += 1
+                        all_deals.append({
+                            "auction_site": SITE,
+                            "listing_url": href,
+                            "make": make,
+                            "model": model,
+                            "year": year,
+                            "current_bid": current_bid,
+                            "closing_date": closing_date,
+                            "status": "Active",
+                        })
+                    except Exception:
+                        continue
 
-        except Exception as e:
-            continue
+                if page_new == 0:
+                    break
 
-    print(f"🏁 Ritchie Bros scraping complete. {success_count} new listings sent to the Forge Database.")
+        await browser.close()
 
-if __name__ == "__main__":
-    scrape_ritchie_bros("skid steer")
+    success = sum(1 for d in all_deals if insert_equipment_listing(d))
+    print(f"🏁 {SITE} complete. {success} listings upserted.")
+    return found_urls
